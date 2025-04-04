@@ -1,39 +1,28 @@
-steps:
-  # Authenticate with Docker Hub
-  - name: 'gcr.io/cloud-builders/docker'
-    entrypoint: 'sh'
-    args:
-      - '-c'
-      - |
-        gcloud auth configure-docker
-        echo "$$DOCKER_HUB_PASSWORD" | docker login -u "rumanak" --password-stdin
-    secretEnv: ['DOCKER_HUB_PASSWORD']
+version: 0.2
 
-  # Build the Docker image from current directory
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['build', '-t', 'rumanak/khanam-flask-backend-app:latest', './app']
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws --version
+      - $(aws ecr get-login-password --region ca-central-1 | docker login --username AWS --password-stdin 445567079138.dkr.ecr.ca-central-1.amazonaws.com)
+      - REPOSITORY_URI=445567079138.dkr.ecr.ca-central-1.amazonaws.com/khanam-ecs-app
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
 
-  # Push the image to Docker Hub
-  - name: 'gcr.io/cloud-builders/docker'
-    args: ['push', 'rumanak/khanam-flask-backend-app:latest']
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - docker build -t $REPOSITORY_URI:$IMAGE_TAG .
+  
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker image...
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo Writing image definitions file...
+      - printf '[{"name":"khanam-ecs-app","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
 
-  # Update Compute Engine with the new container image
-  - name: 'gcr.io/cloud-builders/gcloud'
-    args:
-      - 'compute'
-      - 'instances'
-      - 'update-container'
-      - 'khanam-app-server'
-      - '--zone=us-central1-a'
-      - '--container-image=rumanak/khanam-flask-backend-app:latest'
-
-options:
-  logging: CLOUD_LOGGING_ONLY
-
-images:
-  - 'rumanak/khanam-flask-backend-app:latest'
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/739017050206/secrets/docker-hub-password/versions/latest
-      env: 'DOCKER_HUB_PASSWORD'
+artifacts:
+  files: 
+    - imagedefinitions.json
