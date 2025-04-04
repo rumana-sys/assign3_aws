@@ -1,19 +1,17 @@
 version: 0.2
 
+env:
+  variables:
+    AWS_DEFAULT_REGION: "ca-central-1"
+    REPOSITORY_URI: "445567079138.dkr.ecr.ca-central-1.amazonaws.com/khanam-ecs-app"
+
 phases:
-  install:
-    runtime-versions:
-      docker: 20 # Ensures Docker is available in the CodeBuild environment
   pre_build:
     commands:
-      - echo Installing Docker CLI...
-      - yum update -y
-      - yum install -y docker
-      - service docker start
       - echo Logging in to Amazon ECR...
       - aws --version
-      - aws ecr get-login-password --region ca-central-1 | docker login --username AWS --password-stdin 445567079138.dkr.ecr.ca-central-1.amazonaws.com
-      - REPOSITORY_URI=445567079138.dkr.ecr.ca-central-1.amazonaws.com/khanam-ecs-app
+      - echo Logging into $REPOSITORY_URI
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
       - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
 
   build:
@@ -25,7 +23,7 @@ phases:
   post_build:
     commands:
       - echo Build completed on `date`
-      - echo Pushing the Docker image...
+      - echo Pushing the Docker image to ECR...
       - docker push $REPOSITORY_URI:$IMAGE_TAG
       - echo Writing image definitions file...
       - printf '[{"name":"khanam-ecs-app","imageUri":"%s"}]' $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
