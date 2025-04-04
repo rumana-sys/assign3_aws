@@ -1,0 +1,39 @@
+steps:
+  # Authenticate with Docker Hub
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        gcloud auth configure-docker
+        echo "$$DOCKER_HUB_PASSWORD" | docker login -u "rumanak" --password-stdin
+    secretEnv: ['DOCKER_HUB_PASSWORD']
+
+  # Build the Docker image from current directory
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', 'rumanak/khanam-flask-backend-app:latest', './app']
+
+  # Push the image to Docker Hub
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'rumanak/khanam-flask-backend-app:latest']
+
+  # Update Compute Engine with the new container image
+  - name: 'gcr.io/cloud-builders/gcloud'
+    args:
+      - 'compute'
+      - 'instances'
+      - 'update-container'
+      - 'khanam-app-server'
+      - '--zone=us-central1-a'
+      - '--container-image=rumanak/khanam-flask-backend-app:latest'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - 'rumanak/khanam-flask-backend-app:latest'
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/739017050206/secrets/docker-hub-password/versions/latest
+      env: 'DOCKER_HUB_PASSWORD'
